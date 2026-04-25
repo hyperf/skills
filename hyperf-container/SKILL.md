@@ -32,6 +32,43 @@ public function __construct(
 ) {}
 ```
 
+#### 使用 di() 辅助函数(可选)
+
+如果项目中定义了全局 `di()` 函数,可以简化容器访问:
+
+**检测 di() 函数是否存在**:
+检查项目中是否有类似以下的全局函数定义(通常在 `app/Kernel/Functions.php`):
+
+```php
+use Hyperf\Context\ApplicationContext;
+
+function di(?string $id = null)
+{
+    $container = ApplicationContext::getContainer();
+    if ($id) {
+        return $container->get($id);
+    }
+    return $container;
+}
+```
+
+**使用方式**:
+
+```php
+// 获取容器实例
+$container = di();
+
+// 直接获取服务
+$userService = di(App\Service\UserService::class);
+```
+
+**何时建议添加 di() 函数**:
+- 发现代码中大量使用 `ApplicationContext::getContainer()->get(...)` 
+- 需要简化测试代码或脚本中的容器访问
+- 团队偏好更简洁的语法
+
+**注意**: `di()` 是可选的便利函数,不是 Hyperf 内置功能,需手动定义。
+
 ### 2. 从容器获取服务
 
 ```php
