@@ -31,6 +31,7 @@ skills/
 |---------|------|--------|
 | [easywechat](./easywechat/) | 微信开发 SDK 使用指南，涵盖公众号、小程序、企业微信、微信支付等 | EasyWeChat 6.x, Hyperf |
 | [hyperf-container](./hyperf-container/) | Hyperf 依赖注入容器使用指南，包括服务注册、依赖获取、自动注入等 | Hyperf, PSR-11 |
+| [hyperf-upgrade](./hyperf-upgrade/) | Hyperf 框架版本升级指南，涵盖 3.0 到 3.2 的破坏性变更和迁移方案 | Hyperf 3.x |
 
 ## 📖 Skill 文档规范
 
