@@ -80,12 +80,14 @@ return [
 
 ## Hyperf 集成(推荐方式)
 
-### 创建 WeChat Factory(单例模式)
+### 创建 WeChat Service(单例模式)
 
 **重要**: EasyWeChat 实例存在大量循环依赖，必须使用单例模式避免内存泄露。
 
+**推荐方式一：使用成员变量（更简洁）**
+
 ```php
-namespace App\Factory;
+namespace App\Service;
 
 use EasyWeChat\MiniProgram\Application as MiniProgramApp;
 use EasyWeChat\OfficialAccount\Application as OfficialAccountApp;
@@ -93,7 +95,59 @@ use EasyWeChat\Pay\Application as PayApp;
 use Hyperf\Contract\ConfigInterface;
 use Psr\Container\ContainerInterface;
 
-class WeChatFactory
+class WeChatService
+{
+    private OfficialAccountApp $officialAccount;
+    private MiniProgramApp $miniProgram;
+    private PayApp $pay;
+
+    public function __construct(
+        private ContainerInterface $container,
+        private ConfigInterface $config
+    ) {
+        // 在构造函数中初始化，确保单例
+        $this->officialAccount = new OfficialAccountApp(
+            $this->config->get('wechat.official_account')
+        );
+        
+        $this->miniProgram = new MiniProgramApp(
+            $this->config->get('wechat.mini_program')
+        );
+        
+        $this->pay = new PayApp(
+            $this->config->get('wechat.pay')
+        );
+    }
+
+    public function getOfficialAccount(): OfficialAccountApp
+    {
+        return $this->officialAccount;
+    }
+
+    public function getMiniProgram(): MiniProgramApp
+    {
+        return $this->miniProgram;
+    }
+
+    public function getPay(): PayApp
+    {
+        return $this->pay;
+    }
+}
+```
+
+**推荐方式二：使用数组缓存（延迟初始化）**
+
+```php
+namespace App\Service;
+
+use EasyWeChat\MiniProgram\Application as MiniProgramApp;
+use EasyWeChat\OfficialAccount\Application as OfficialAccountApp;
+use EasyWeChat\Pay\Application as PayApp;
+use Hyperf\Contract\ConfigInterface;
+use Psr\Container\ContainerInterface;
+
+class WeChatService
 {
     private array $instances = [];
 
@@ -103,7 +157,7 @@ class WeChatFactory
     ) {}
 
     /**
-     * 获取公众号实例(单例)
+     * 获取公众号实例(单例，延迟初始化)
      */
     public function officialAccount(): OfficialAccountApp
     {
@@ -117,7 +171,7 @@ class WeChatFactory
     }
 
     /**
-     * 获取小程序实例(单例)
+     * 获取小程序实例(单例，延迟初始化)
      */
     public function miniProgram(): MiniProgramApp
     {
@@ -131,7 +185,7 @@ class WeChatFactory
     }
 
     /**
-     * 获取支付实例(单例)
+     * 获取支付实例(单例，延迟初始化)
      */
     public function pay(): PayApp
     {
@@ -146,28 +200,75 @@ class WeChatFactory
 }
 ```
 
+**两种方式对比**：
+- **成员变量方式**：代码更简洁，在构造函数中统一初始化，适合所有实例都需要使用的场景
+- **数组缓存方式**：延迟初始化，只在首次使用时创建，适合部分实例可能不使用的场景
+
 ### 在 Controller/Service 中使用
 
-```php
+**重要提示**: EasyWeChat 6.x 不再提供封装好的便捷方法（如 `jssdk`、`oauth` 等），需要开发者直接调用底层 HTTP 客户端。具体接口请参考 [微信官方文档](https://developers.weixin.qq.com/doc/)。
+
+``php
 namespace App\Controller;
 
-use App\Factory\WeChatFactory;
+use App\Service\WeChatService;
 use Hyperf\HttpServer\Annotation\AutoController;
+use Hyperf\Codec\Json;
 
 #[AutoController]
 class WeChatController
 {
     public function __construct(
-        private WeChatFactory $weChatFactory
+        private WeChatService $weChatService
     ) {}
 
-    public function getJsConfig(string $url)
+    /**
+     * 示例：小程序登录获取 openid
+     */
+    public function login(string $code)
     {
-        // 每次调用都返回同一个实例,不会造成内存泄露
-        $app = $this->weChatFactory->officialAccount();
-        return $app->jssdk->buildConfig(['chooseImage'], false, false, false);
+        $app = $this->weChatService->getMiniProgram();
+        
+        // 直接调用 HTTP 客户端
+        $client = $app->getClient();
+        $response = $client->get('/sns/jscode2session', [
+            'query' => [
+                'appid' => $app->getAccount()->getAppId(),
+                'secret' => $app->getAccount()->getSecret(),
+                'js_code' => $code,
+                'grant_type' => 'authorization_code',
+            ],
+        ]);
+
+        return Json::decode($response->getContent());
+    }
+
+    /**
+     * 示例：获取公众号用户信息
+     */
+    public function getUserInfo(string $openid)
+    {
+        $app = $this->weChatService->getOfficialAccount();
+        
+        $client = $app->getClient();
+        $response = $client->get('/cgi-bin/user/info', [
+            'query' => [
+                'openid' => $openid,
+                'lang' => 'zh_CN',
+            ],
+        ]);
+
+        return Json::decode($response->getContent());
     }
 }
+```
+
+**关键点**：
+1. ✅ 通过 `$app->getClient()` 获取 HTTP 客户端
+2. ✅ 使用 `$app->getAccount()` 获取账号配置（AppID、Secret 等）
+3. ✅ 直接调用微信 API 接口，参考官方文档构造请求
+4. ✅ 使用 `Json::decode()` 解析响应数据
+
 ```
 
 ## 快速开始
