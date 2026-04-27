@@ -55,7 +55,36 @@ composer require limingxinleo/easywechat-classmap
 
 配置文件 `config/autoload/wechat.php`:
 
+**方式一：使用完整命名空间（推荐）**
+
+````php
+return [
+    'official_account' => [
+        'app_id' => \Hyperf\Support\env('WECHAT_OFFICIAL_ACCOUNT_APPID'),
+        'secret' => \Hyperf\Support\env('WECHAT_OFFICIAL_ACCOUNT_SECRET'),
+        'token' => \Hyperf\Support\env('WECHAT_OFFICIAL_ACCOUNT_TOKEN'),
+        'aes_key' => \Hyperf\Support\env('WECHAT_OFFICIAL_ACCOUNT_AES_KEY'),
+    ],
+    'mini_program' => [
+        'app_id' => \Hyperf\Support\env('WECHAT_MINI_PROGRAM_APPID'),
+        'secret' => \Hyperf\Support\env('WECHAT_MINI_PROGRAM_SECRET'),
+    ],
+    'pay' => [
+        'default_merchant' => [
+            'mch_id' => \Hyperf\Support\env('WECHAT_PAY_MCH_ID'),
+            'key' => \Hyperf\Support\env('WECHAT_PAY_KEY'),
+            'cert_path' => \Hyperf\Support\env('WECHAT_PAY_CERT_PATH'),
+            'key_path' => \Hyperf\Support\env('WECHAT_PAY_KEY_PATH'),
+        ],
+    ],
+];
+```
+
+**方式二：导入函数后使用**
+
 ```php
+use function Hyperf\Support\env;
+
 return [
     'official_account' => [
         'app_id' => env('WECHAT_OFFICIAL_ACCOUNT_APPID'),
@@ -77,6 +106,8 @@ return [
     ],
 ];
 ```
+
+**注意**: Hyperf 最新版本已移除全局 `env()` 函数，请使用以上两种方式之一。
 
 ## Hyperf 集成(推荐方式)
 
@@ -304,8 +335,8 @@ class WeChatController
 
 - **必须安装协程适配组件**：`composer require limingxinleo/easywechat-classmap`，解决 EasyWeChat 6.x 在 Hyperf 多协程环境下的并发冲突问题
 - **使用单例模式创建实例**,避免内存泄露。EasyWeChat 存在大量循环依赖,每次 new 都会导致内存无法完全释放
-- **使用 Factory 模式**管理单例,便于统一维护和测试
-- **敏感配置使用环境变量**,不要硬编码
+- **使用 Factory/Service 模式**管理单例,便于统一维护和测试
+- **敏感配置使用环境变量**,不要硬编码。Hyperf 最新版本请在文件顶部添加 `use function Hyperf\Support\env;` 来导入 env 函数
 - **支付回调必须验签**,确保请求来自微信
 - **记录关键日志**,特别是支付、登录流程
 - **使用 HTTPS**,微信接口要求安全传输
@@ -353,11 +384,35 @@ composer require limingxinleo/easywechat-classmap
 - 每个协程使用独立的 curl 句柄，避免并发冲突
 - 保持单例模式的优势，同时解决协程安全问题
 
-### 3. Access Token 缓存
+### 3. Hyperf 最新版本 env() 函数变更
+
+**问题描述**：
+Hyperf 最新版本已移除全局 `env()` 函数，直接使用会导致 `Call to undefined function env()` 错误。
+
+**解决方案**：
+在文件顶部导入 env 函数：
+
+```php
+use function Hyperf\Support\env;
+
+// 然后可以直接使用
+'app_id' => env('WECHAT_APPID'),
+'secret' => env('WECHAT_SECRET'),
+```
+
+或者使用完整命名空间（不推荐，代码冗长）：
+
+```php
+'app_id' => \Hyperf\Support\env('WECHAT_APPID'),
+```
+
+**推荐做法**：在配置文件顶部统一导入 `use function Hyperf\Support\env;`，然后直接使用 `env()`。
+
+### 4. Access Token 缓存
 
 EasyWeChat 默认使用文件缓存,在 Hyperf 中应改为 Redis:
 
-```php
+``php
 use EasyWeChat\Core\AccessToken;
 use Hyperf\Redis\Redis;
 
@@ -366,14 +421,14 @@ $app->rebind('access_token', function () use ($redis) {
 });
 ```
 
-### 4. 签名验证失败
+### 5. 签名验证失败
 
 检查:
 - AppID 和 Secret 是否正确
 - Token 是否与微信公众平台配置一致
 - 服务器时间是否同步
 
-### 5. 支付回调收不到
+### 6. 支付回调收不到
 
 - 确认 notify_url 可公网访问
 - 确认未设置 IP 白名单限制
