@@ -1,5 +1,19 @@
 # EasyWeChat 详细参考
 
+## ⚠️ 重要提示
+
+**EasyWeChat 6.x + Hyperf 协程环境必须安装适配组件**：
+
+```bash
+composer require limingxinleo/easywechat-classmap
+```
+
+原因：
+- EasyWeChat 6.x 使用 Symfony Http Client（基于 curl）
+- Hyperf 是多协程框架，多个协程可能同时使用同一个 curl 实例
+- 会导致并发冲突、响应错乱、随机报错等问题
+- classmap 组件提供协程安全的 HTTP 客户端实现
+
 ## 公众号开发
 
 ### 1. 服务器配置验证
@@ -463,7 +477,7 @@ class WeChatRefundService
 
 ## 通过 Listener 注册为容器服务
 
-适用于需要将 EasyWeChat 实例直接注册到容器的场景:
+适用于需要将 EasyWeChat 实例直接注册到容器的场景。**容器注册的实例也是单例的**。
 
 ```php
 namespace App\Listener;
@@ -489,11 +503,27 @@ class WeChatServiceRegisterListener implements ListenerProviderInterface
 
     public function process(object $event): void
     {
-        // 将公众号实例注册到容器
+        // 将公众号实例注册到容器(单例)
+        // 注意: 这会在应用启动时就创建实例
         $this->container->set(
             'wechat.official_account',
             $this->weChatFactory->officialAccount()
         );
+        
+        // 使用方式
+        // $app = $this->container->get('wechat.official_account');
     }
 }
 ```
+
+### Factory 模式 vs 容器注册对比
+
+| 特性 | Factory 模式 | 容器注册 |
+|------|-------------|---------|
+| **单例保证** | ✅ 是 | ✅ 是 |
+| **类型安全** | ✅ IDE 自动补全 | ❌ 返回 mixed |
+| **延迟初始化** | ✅ 首次使用时创建 | ❌ 启动时即创建 |
+| **依赖注入** | ✅ 类型明确的依赖 | ⚠️ 需要字符串 key |
+| **代码可读性** | ✅ 更清晰 | ⚠️ 较隐式 |
+
+**推荐**: 优先使用 Factory 模式，除非有特殊需求（如需要在其他地方通过容器获取）。
